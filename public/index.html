@@ -1,1 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>渠道商自动评分系统</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #eef3ff 0%, #f8fafc 45%, #eef7f3 100%);
+      color: #111827;
+    }
+    .page { max-width: 1080px; margin: 0 auto; padding: 40px 20px; }
+    .badge {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    h1 { margin: 16px 0 10px; font-size: 36px; line-height: 1.2; letter-spacing: -0.03em; }
+    .subtitle { max-width: 760px; margin: 0 0 28px; color: #4b5563; font-size: 16px; line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }
+    .card {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 24px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+    .card-header { padding: 22px 22px 0; }
+    .card-title { margin: 0; font-size: 18px; font-weight: 800; }
+    .card-desc { margin: 8px 0 0; color: #6b7280; font-size: 13px; line-height: 1.6; }
+    form { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 800; color: #374151; }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 13px 14px;
+      font-size: 14px;
+      color: #111827;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    input:focus, textarea:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .actions { display: flex; gap: 10px; margin-top: 4px; }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .primary { flex: 1; background: #2563eb; color: white; box-shadow: 0 12px 24px rgba(37, 99, 235, 0.24); }
+    .secondary { background: #eef2ff; color: #1d4ed8; }
+    .result-wrap { padding: 22px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #4b5563;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: #9ca3af; }
+    .status.success { background: #ecfdf5; color: #047857; }
+    .status.success .dot { background: #10b981; }
+    .status.error { background: #fef2f2; color: #b91c1c; }
+    .status.error .dot { background: #ef4444; }
+    .status.loading { background: #eff6ff; color: #1d4ed8; }
+    .status.loading .dot { background: #2563eb; animation: pulse 1s infinite ease-in-out; }
+    @keyframes pulse { 0%,100%{opacity:.35;transform:scale(.9)} 50%{opacity:1;transform:scale(1.15)} }
+    .result {
+      min-height: 360px;
+      border-radius: 18px;
+      background: #0f172a;
+      color: #dbeafe;
+      padding: 18px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .empty { color: #94a3b8; }
+    .warning {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #047857;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section>
+      <div class="badge">公开网页版本</div>
+      <h1>渠道商自动评分系统</h1>
+      <p class="subtitle">填写公司名称、国家或地区和补充说明，点击运行后调用服务端接口，再由服务端安全调用 Dify Workflow。</p>
+    </section>
 
+    <section class="grid">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">输入信息</h2>
+          <p class="card-desc">不需要用户填写 API Key。API Key 会放在 Vercel 环境变量里。</p>
+        </div>
+
+        <form id="scoreForm">
+          <div>
+            <label for="companyName">公司名称 company_name</label>
+            <input id="companyName" type="text" placeholder="例如：HKU" required />
+          </div>
+
+          <div>
+            <label for="countryOrRegion">国家或地区 country_or_region</label>
+            <input id="countryOrRegion" type="text" placeholder="例如：Hong Kong" required />
+          </div>
+
+          <div>
+            <label for="extraNotes">补充说明 extra_notes</label>
+            <textarea id="extraNotes" placeholder="例如：主营品类、合作背景、网站链接、已有沟通记录等，可留空"></textarea>
+          </div>
+
+          <div class="actions">
+            <button class="secondary" type="button" id="clearBtn">清空</button>
+            <button class="primary" type="submit" id="submitBtn">运行评分</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">评分结果</h2>
+          <p class="card-desc">如果工作流输出字段不是 result，本页面会自动展示完整 outputs。</p>
+        </div>
+
+        <div class="result-wrap">
+          <div id="status" class="status">
+            <span class="dot"></span>
+            等待运行
+          </div>
+          <pre id="result" class="result"><span class="empty">运行后结果会显示在这里。</span></pre>
+          <div class="warning">
+            这个版本适合部署到 Vercel 后公开分享。别人打开你的 Vercel 链接即可使用，不会看到 Dify API Key。
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API_ENDPOINT = "/api/score";
+
+    const form = document.getElementById("scoreForm");
+    const companyNameInput = document.getElementById("companyName");
+    const countryOrRegionInput = document.getElementById("countryOrRegion");
+    const extraNotesInput = document.getElementById("extraNotes");
+    const submitBtn = document.getElementById("submitBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+
+    function setStatus(type, text) {
+      statusEl.className = `status ${type || ""}`.trim();
+      statusEl.innerHTML = `<span class="dot"></span>${text}`;
+    }
+
+    function showResult(content) {
+      resultEl.textContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    }
+
+    async function runScore(payload) {
+      const response = await fetch(API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const text = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+
+      if (!response.ok) {
+        throw new Error(typeof data === "string" ? data : JSON.stringify(data, null, 2));
+      }
+
+      return data;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const companyName = companyNameInput.value.trim();
+      const countryOrRegion = countryOrRegionInput.value.trim();
+      const extraNotes = extraNotesInput.value.trim();
+
+      if (!companyName || !countryOrRegion) {
+        setStatus("error", "请先填写必填项");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      setStatus("loading", "正在运行评分...");
+      showResult("请求中，请稍候...");
+
+      try {
+        const data = await runScore({
+          company_name: companyName,
+          country_or_region: countryOrRegion,
+          extra_notes: extraNotes
+        });
+
+        const outputs = data?.data?.outputs;
+        const finalResult = outputs?.result || outputs || data;
+
+        setStatus("success", "运行成功");
+        showResult(finalResult);
+      } catch (error) {
+        setStatus("error", "运行失败");
+        showResult(error.message || String(error));
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      companyNameInput.value = "";
+      countryOrRegionInput.value = "";
+      extraNotesInput.value = "";
+      setStatus("", "等待运行");
+      resultEl.innerHTML = '<span class="empty">运行后结果会显示在这里。</span>';
+    });
+  </script>
+</body>
+</html>
