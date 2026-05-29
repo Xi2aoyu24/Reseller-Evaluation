@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>渠道商自动评分系统</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: linear-gradient(135deg, #eef3ff 0%, #f8fafc 45%, #eef7f3 100%); color: #111827; }
@@ -31,12 +33,27 @@
     .status.error { background: #fef2f2; color: #b91c1c; } .status.error .dot { background: #ef4444; }
     .status.loading { background: #eff6ff; color: #1d4ed8; } .status.loading .dot { background: #2563eb; animation: pulse 1s infinite ease-in-out; }
     @keyframes pulse { 0%,100%{opacity:.35;transform:scale(.9)} 50%{opacity:1;transform:scale(1.15)} }
-    .result { min-height: 360px; border-radius: 18px; background: #0f172a; color: #dbeafe; padding: 18px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.7; }
-    .empty { color: #94a3b8; }
+    .result { min-height: 360px; max-height: 620px; border-radius: 18px; background: #0f172a; color: #e5edf9; padding: 22px; overflow: auto; word-break: break-word; font-size: 14px; line-height: 1.8; }
+    .result .empty { color: #94a3b8; }
+    .result h1, .result h2, .result h3, .result h4 { color: #fff; line-height: 1.35; margin: 1.1em 0 .5em; }
+    .result h1 { font-size: 24px; }
+    .result h2 { font-size: 20px; border-bottom: 1px solid rgba(148,163,184,.28); padding-bottom: 8px; }
+    .result h3 { font-size: 17px; }
+    .result p { margin: .65em 0; }
+    .result strong { color: #fff; font-weight: 800; }
+    .result ul, .result ol { padding-left: 22px; margin: .65em 0; }
+    .result li { margin: .28em 0; }
+    .result a { color: #93c5fd; text-decoration: underline; }
+    .result blockquote { margin: 14px 0; padding: 10px 14px; border-left: 4px solid #60a5fa; background: rgba(59,130,246,.12); color: #dbeafe; border-radius: 10px; }
+    .result code { background: rgba(148,163,184,.18); color: #bfdbfe; padding: 2px 6px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .92em; }
+    .result pre { background: #020617; color: #dbeafe; padding: 14px; border-radius: 12px; overflow: auto; line-height: 1.7; }
+    .result pre code { background: transparent; padding: 0; color: inherit; }
+    .result table { width: 100%; border-collapse: collapse; margin: 14px 0; display: block; overflow-x: auto; }
+    .result th, .result td { border: 1px solid rgba(148,163,184,.35); padding: 10px 12px; text-align: left; vertical-align: top; }
+    .result th { background: rgba(148,163,184,.18); color: #fff; }
     .feedback-box { margin-top: 14px; padding: 16px; border-radius: 16px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-size: 13px; line-height: 1.7; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
     .feedback-text { margin: 0; color: #1e40af; }
     .feedback-link { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 10px 14px; background: #2563eb; color: #fff; text-decoration: none; font-weight: 800; white-space: nowrap; box-shadow: 0 10px 22px rgba(37,99,235,.22); }
-    .feedback-link:hover { background: #1d4ed8; }
     @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } h1 { font-size: 28px; } }
   </style>
 </head>
@@ -62,7 +79,7 @@
         <div class="card-header"><h2 class="card-title">评分结果</h2></div>
         <div class="result-wrap">
           <div id="status" class="status"><span class="dot"></span>等待运行</div>
-          <pre id="result" class="result"><span class="empty">运行后结果会显示在这里。</span></pre>
+          <div id="result" class="result"><span class="empty">运行后结果会显示在这里。</span></div>
           <div class="feedback-box">
             <p class="feedback-text">使用过程中遇到问题，或对评分结果有建议？欢迎提交反馈问卷。</p>
             <a class="feedback-link" href="YOUR_FEEDBACK_FORM_URL" target="_blank" rel="noopener noreferrer">填写反馈问卷</a>
@@ -84,13 +101,63 @@
     const statusEl = document.getElementById("status");
     const resultEl = document.getElementById("result");
 
+    if (window.marked) {
+      marked.setOptions({ breaks: true, gfm: true });
+    }
+
     function setStatus(type, text) {
       statusEl.className = `status ${type || ""}`.trim();
       statusEl.innerHTML = `<span class="dot"></span>${text}`;
     }
 
-    function showResult(content) {
-      resultEl.textContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderMarkdown(markdownText) {
+      if (!window.marked || !window.DOMPurify) {
+        resultEl.textContent = markdownText || "";
+        return;
+      }
+
+      const rawHtml = marked.parse(markdownText || "");
+      const safeHtml = DOMPurify.sanitize(rawHtml);
+      resultEl.innerHTML = safeHtml;
+
+      resultEl.querySelectorAll("a").forEach((a) => {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      });
+    }
+
+    function showResult(content, options = {}) {
+      if (options.loading || options.error) {
+        resultEl.textContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+        return;
+      }
+
+      if (typeof content === "string") {
+        renderMarkdown(content);
+        return;
+      }
+
+      const possibleMarkdown =
+        content?.result ||
+        content?.answer ||
+        content?.text ||
+        content?.output ||
+        content?.content;
+
+      if (typeof possibleMarkdown === "string") {
+        renderMarkdown(possibleMarkdown);
+      } else {
+        resultEl.innerHTML = `<pre><code>${escapeHtml(JSON.stringify(content, null, 2))}</code></pre>`;
+      }
     }
 
     async function runScore(payload) {
@@ -124,7 +191,7 @@
 
       submitBtn.disabled = true;
       setStatus("loading", "正在运行评分...");
-      showResult("请求中，请稍候...");
+      showResult("请求中，请稍候...", { loading: true });
 
       try {
         const data = await runScore({ company_name: companyName, country_or_region: countryOrRegion, extra_notes: extraNotes });
@@ -134,7 +201,7 @@
         showResult(finalResult);
       } catch (error) {
         setStatus("error", "运行失败");
-        showResult(error.message || String(error));
+        showResult(error.message || String(error), { error: true });
       } finally {
         submitBtn.disabled = false;
       }
