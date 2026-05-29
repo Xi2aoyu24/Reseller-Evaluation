@@ -1,4 +1,4 @@
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 300 };
 
 function safeJsonParse(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -23,9 +23,7 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.DIFY_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "Missing DIFY_API_KEY in Vercel Environment Variables." });
-    }
+    if (!apiKey) return res.status(500).json({ error: "Missing DIFY_API_KEY in Vercel Environment Variables." });
 
     const { company_name, country_or_region, extra_notes } = req.body || {};
     if (!company_name || !country_or_region) {
@@ -58,7 +56,6 @@ export default async function handler(req, res) {
 
     const reader = difyResponse.body.getReader();
     const decoder = new TextDecoder("utf-8");
-
     let buffer = "";
     let finalOutputs = null;
     let finalText = "";
@@ -102,23 +99,11 @@ export default async function handler(req, res) {
     }
 
     if (finalOutputs) {
-      return res.status(200).json({
-        ok: true,
-        data: {
-          outputs: finalOutputs,
-          result: finalText
-        }
-      });
+      return res.status(200).json({ ok: true, data: { outputs: finalOutputs, result: finalText } });
     }
 
     if (finalText.trim()) {
-      return res.status(200).json({
-        ok: true,
-        data: {
-          outputs: { result: finalText },
-          result: finalText
-        }
-      });
+      return res.status(200).json({ ok: true, data: { outputs: { result: finalText }, result: finalText } });
     }
 
     return res.status(500).json({
