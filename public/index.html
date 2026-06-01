@@ -21,11 +21,12 @@
     input, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 14px; background: #fff; padding: 13px 14px; font-size: 14px; color: #111827; outline: none; }
     input:focus, textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
     textarea { min-height: 120px; resize: vertical; }
-    .actions { display: flex; gap: 10px; margin-top: 4px; }
-    button { border: 0; border-radius: 14px; padding: 13px 16px; font-size: 14px; font-weight: 800; cursor: pointer; }
+    .actions, .export-actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    button, .export-link { border: 0; border-radius: 14px; padding: 13px 16px; font-size: 14px; font-weight: 800; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .primary { flex: 1; background: #2563eb; color: #fff; box-shadow: 0 12px 24px rgba(37,99,235,.24); }
     .secondary { background: #eef2ff; color: #1d4ed8; }
+    .export-link { background: #f1f5f9; color: #0f172a; border: 1px solid #dbe3ef; }
     .result-wrap { padding: 22px; }
     .status { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 8px 12px; border-radius: 999px; background: #f3f4f6; color: #4b5563; font-size: 13px; font-weight: 800; }
     .dot { width: 8px; height: 8px; border-radius: 999px; background: #9ca3af; }
@@ -44,10 +45,6 @@
     .result ul, .result ol { padding-left: 22px; margin: .65em 0; }
     .result li { margin: .28em 0; }
     .result a { color: #93c5fd; text-decoration: underline; }
-    .result blockquote { margin: 14px 0; padding: 10px 14px; border-left: 4px solid #60a5fa; background: rgba(59,130,246,.12); color: #dbeafe; border-radius: 10px; }
-    .result code { background: rgba(148,163,184,.18); color: #bfdbfe; padding: 2px 6px; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .92em; }
-    .result pre { background: #020617; color: #dbeafe; padding: 14px; border-radius: 12px; overflow: auto; line-height: 1.7; }
-    .result pre code { background: transparent; padding: 0; color: inherit; }
     .result table { width: 100%; border-collapse: collapse; margin: 14px 0; display: block; overflow-x: auto; }
     .result th, .result td { border: 1px solid rgba(148,163,184,.35); padding: 10px 12px; text-align: left; vertical-align: top; }
     .result th { background: rgba(148,163,184,.18); color: #fff; }
@@ -72,6 +69,10 @@
           <div><label for="countryOrRegion">国家或地区 country_or_region</label><input id="countryOrRegion" type="text" placeholder="例如：Hong Kong" required /></div>
           <div><label for="extraNotes">补充说明 extra_notes</label><textarea id="extraNotes" placeholder="例如：主营品类、合作背景、网站链接、已有沟通记录等，可留空"></textarea></div>
           <div class="actions"><button class="secondary" type="button" id="clearBtn">清空</button><button class="primary" type="submit" id="submitBtn">运行评分</button></div>
+          <div class="export-actions">
+            <a class="export-link" href="/api/export-excel" target="_blank" rel="noopener noreferrer">导出 Excel</a>
+            <a class="export-link" href="/api/export-word" target="_blank" rel="noopener noreferrer">导出 Word</a>
+          </div>
         </form>
       </div>
 
@@ -82,7 +83,7 @@
           <div id="result" class="result"><span class="empty">运行后结果会显示在这里。</span></div>
           <div class="feedback-box">
             <p class="feedback-text">使用过程中遇到问题，或对评分结果有建议？欢迎提交反馈问卷。</p>
-            <a class="feedback-link" href="https://docs.google.com/forms/d/e/1FAIpQLSdBwtRB0ZR17r4Qg2TqDRHatwILutpWtygJGjhRhRhiE3PFrA/viewform?usp=dialog" target="_blank" rel="noopener noreferrer">填写反馈问卷</a>
+            <a class="feedback-link" href="YOUR_FEEDBACK_FORM_URL" target="_blank" rel="noopener noreferrer">填写反馈问卷</a>
           </div>
         </div>
       </div>
@@ -91,6 +92,7 @@
 
   <script>
     const API_ENDPOINT = "/api/score";
+    const SAVE_ENDPOINT = "/api/save";
 
     const form = document.getElementById("scoreForm");
     const companyNameInput = document.getElementById("companyName");
@@ -101,9 +103,7 @@
     const statusEl = document.getElementById("status");
     const resultEl = document.getElementById("result");
 
-    if (window.marked) {
-      marked.setOptions({ breaks: true, gfm: true });
-    }
+    if (window.marked) marked.setOptions({ breaks: true, gfm: true });
 
     function setStatus(type, text) {
       statusEl.className = `status ${type || ""}`.trim();
@@ -126,8 +126,7 @@
       }
 
       const rawHtml = marked.parse(markdownText || "");
-      const safeHtml = DOMPurify.sanitize(rawHtml);
-      resultEl.innerHTML = safeHtml;
+      resultEl.innerHTML = DOMPurify.sanitize(rawHtml);
 
       resultEl.querySelectorAll("a").forEach((a) => {
         a.setAttribute("target", "_blank");
@@ -137,7 +136,8 @@
 
     function showResult(content, options = {}) {
       if (options.loading || options.error) {
-        resultEl.textContent = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+        resultEl.textContent =
+          typeof content === "string" ? content : JSON.stringify(content, null, 2);
         return;
       }
 
@@ -151,17 +151,20 @@
         content?.answer ||
         content?.text ||
         content?.output ||
-        content?.content;
+        content?.content ||
+        content?.scoring_json_text;
 
       if (typeof possibleMarkdown === "string") {
         renderMarkdown(possibleMarkdown);
       } else {
-        resultEl.innerHTML = `<pre><code>${escapeHtml(JSON.stringify(content, null, 2))}</code></pre>`;
+        resultEl.innerHTML = `<pre><code>${escapeHtml(
+          JSON.stringify(content, null, 2)
+        )}</code></pre>`;
       }
     }
 
-    async function runScore(payload) {
-      const response = await fetch(API_ENDPOINT, {
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -169,12 +172,58 @@
 
       const text = await response.text();
       let data;
-      try { data = JSON.parse(text); } catch { data = text; }
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
 
       if (!response.ok) {
-        throw new Error(typeof data === "string" ? data : JSON.stringify(data, null, 2));
+        throw new Error(
+          typeof data === "string" ? data : JSON.stringify(data, null, 2)
+        );
       }
+
       return data;
+    }
+
+    function tryParseJson(text) {
+      if (typeof text !== "string") return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return null;
+      }
+    }
+
+    function extractOutputs(data) {
+      return data?.data?.outputs || {};
+    }
+
+    function extractFinalResult(data) {
+      const outputs = extractOutputs(data);
+      return (
+        data?.data?.result ||
+        outputs?.result ||
+        outputs?.scoring_json_text ||
+        outputs ||
+        data
+      );
+    }
+
+    function extractMetadata(data) {
+      const outputs = extractOutputs(data);
+      const parsedScoring = tryParseJson(outputs?.scoring_json_text);
+      const source = parsedScoring || outputs || {};
+
+      return {
+        total_score: outputs?.total_score ?? source?.total_score ?? null,
+        grade: outputs?.grade ?? source?.grade ?? "",
+        grade_advice: outputs?.grade_advice ?? source?.grade_advice ?? "",
+        overall_confidence:
+          outputs?.overall_confidence ?? source?.overall_confidence ?? ""
+      };
     }
 
     form.addEventListener("submit", async (event) => {
@@ -194,13 +243,37 @@
       showResult("请求中，请稍候...", { loading: true });
 
       try {
-        const data = await runScore({ company_name: companyName, country_or_region: countryOrRegion, extra_notes: extraNotes });
-        const outputs = data?.data?.outputs;
-        const finalResult = data?.data?.result || outputs?.result || outputs || data;
-        setStatus("success", "运行成功");
+        const data = await postJson(API_ENDPOINT, {
+          company_name: companyName,
+          country_or_region: countryOrRegion,
+          extra_notes: extraNotes
+        });
+
+        const finalResult = extractFinalResult(data);
+        const metadata = extractMetadata(data);
+        const resultMarkdown =
+          typeof finalResult === "string"
+            ? finalResult
+            : JSON.stringify(finalResult, null, 2);
+
+        setStatus("success", "运行成功，正在保存...");
         showResult(finalResult);
+
+        const saveResp = await postJson(SAVE_ENDPOINT, {
+          company_name: companyName,
+          country_or_region: countryOrRegion,
+          extra_notes: extraNotes,
+          total_score: metadata.total_score,
+          grade: metadata.grade,
+          grade_advice: metadata.grade_advice,
+          overall_confidence: metadata.overall_confidence,
+          result_markdown: resultMarkdown,
+          raw_json: data
+        });
+
+        setStatus("success", `运行成功，已保存记录 ${saveResp.id}`);
       } catch (error) {
-        setStatus("error", "运行失败");
+        setStatus("error", "运行或保存失败");
         showResult(error.message || String(error), { error: true });
       } finally {
         submitBtn.disabled = false;
@@ -212,7 +285,8 @@
       countryOrRegionInput.value = "";
       extraNotesInput.value = "";
       setStatus("", "等待运行");
-      resultEl.innerHTML = '<span class="empty">运行后结果会显示在这里。</span>';
+      resultEl.innerHTML =
+        '<span class="empty">运行后结果会显示在这里。</span>';
     });
   </script>
 </body>
