@@ -17,6 +17,21 @@ function getSupabaseClient() {
   });
 }
 
+function formatChinaTime(value) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(new Date(value)).replace(/\//g, "-");
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).send("Only GET method is allowed");
@@ -34,7 +49,7 @@ export default async function handler(req, res) {
     }
 
     const rows = (data || []).map((r) => ({
-      "创建时间": r.created_at,
+      "创建时间": formatChinaTime(r.created_at),
       "公司名称": r.company_name,
       "国家/地区": r.country_or_region,
       "补充说明": r.extra_notes,
@@ -70,8 +85,8 @@ export default async function handler(req, res) {
     });
 
     const filename = `evaluation-results-${new Date()
-      .toISOString()
-      .slice(0, 10)}.xlsx`;
+      .toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" })
+      .replace(/\//g, "-")}.xlsx`;
 
     res.setHeader(
       "Content-Type",
