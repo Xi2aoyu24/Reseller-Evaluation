@@ -5,7 +5,12 @@ import {
   Paragraph,
   TextRun,
   HeadingLevel,
-  PageBreak
+  PageBreak,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle
 } from "docx";
 
 function getSupabaseClient() {
@@ -24,29 +29,178 @@ function getSupabaseClient() {
   });
 }
 
-function markdownToPlainText(markdown) {
-  return String(markdown || "")
-    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, ""))
-    .replace(/^#{1,6}\s+/gm, "")
+function cleanInlineMarkdown(text) {
+  return String(text || "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/^\s*[-*+]\s+/gm, "• ")
     .trim();
 }
 
-function buildReportParagraphs(record, isLast) {
-  const paragraphs = [];
+function isTableSeparator(line) {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(
+    String(line || "").trim()
+  );
+}
 
-  paragraphs.push(
+function isTableRow(line) {
+  const s = String(line || "").trim();
+  return s.includes("|") && s.split("|").length >= 3;
+}
+
+function parseTable(lines, start) {
+  if (!isTableRow(lines[start]) || !isTableSeparator(lines[start + 1])) {
+    return null;
+  }
+
+  const rows = [];
+  let i = start;
+
+  while (i < lines.length && isTableRow(lines[i])) {
+    if (!isTableSeparator(lines[i])) {
+      rows.push(
+        lines[i]
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((cell) => cleanInlineMarkdown(cell))
+      );
+    }
+
+    i += 1;
+  }
+
+  return rows.length ? { rows, nextIndex: i } : null;
+}
+
+function makeTable(rows) {
+  const colCount = Math.max(...rows.map((r) => r.length));
+
+  return new Table({
+    width: {
+      size: 100,
+      type: WidthType.PERCENTAGE
+    },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "999999" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "999999" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "999999" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "999999" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" }
+    },
+    rows: rows.map((row, rowIndex) => {
+      const cells = [...row];
+
+      while (cells.length < colCount) {
+        cells.push("");
+      }
+
+      return new TableRow({
+        children: cells.map(
+          (cell) =>
+            new TableCell({
+              width: {
+                size: Math.floor(100 / colCount),
+                type: WidthType.PERCENTAGE
+              },
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: cell,
+                      bold: rowIndex === 0
+                    })
+                  ]
+                })
+              ]
+            })
+        )
+      });
+    })
+  });
+}
+
+function createPlainParagraph(text, options = {}) {
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: cleanInlineMarkdown(text),
+        bold: !!options.bold
+      })
+    ]
+  });
+}
+
+function markdownToDocxBlocks(markdown) {
+  const blocks = [];
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+
+  let i = 0;
+
+  while (i < lines.length) {
+    const raw = lines[i];
+    const line = raw.trim();
+
+    if (!line) {
+      i += 1;
+      continue;
+    }
+
+    const table = parseTable(lines, i);
+
+    if (table) {
+      blocks.push(makeTable(table.rows));
+      i = table.nextIndex;
+      continue;
+    }
+
+    if (/^###\s+/.test(line)) {
+      blocks.push(
+        new Paragraph({
+          text: cleanInlineMarkdown(line.replace(/^###\s+/, "")),
+          heading: HeadingLevel.HEADING_3
+        })
+      );
+    } else if (/^##\s+/.test(line)) {
+      blocks.push(
+        new Paragraph({
+          text: cleanInlineMarkdown(line.replace(/^##\s+/, "")),
+          heading: HeadingLevel.HEADING_2
+        })
+      );
+    } else if (/^#\s+/.test(line)) {
+      blocks.push(
+        new Paragraph({
+          text: cleanInlineMarkdown(line.replace(/^#\s+/, "")),
+          heading: HeadingLevel.HEADING_1
+        })
+      );
+    } else if (/^\s*[-*+]\s+/.test(raw)) {
+      blocks.push(createPlainParagraph("• " + line.replace(/^[-*+]\s+/, "")));
+    } else {
+      blocks.push(createPlainParagraph(line));
+    }
+
+    i += 1;
+  }
+
+  return blocks;
+}
+
+function buildReportBlocks(record, isLast) {
+  const blocks = [];
+
+  blocks.push(
     new Paragraph({
       text: `${record.company_name || "未命名公司"} - 渠道商评估报告`,
       heading: HeadingLevel.HEADING_1
     })
   );
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       children: [
         new TextRun({ text: "国家/地区：", bold: true }),
@@ -55,7 +209,7 @@ function buildReportParagraphs(record, isLast) {
     })
   );
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       children: [
         new TextRun({ text: "总分：", bold: true }),
@@ -64,7 +218,7 @@ function buildReportParagraphs(record, isLast) {
     })
   );
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       children: [
         new TextRun({ text: "等级：", bold: true }),
@@ -73,7 +227,7 @@ function buildReportParagraphs(record, isLast) {
     })
   );
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       children: [
         new TextRun({ text: "分级建议：", bold: true }),
@@ -82,7 +236,7 @@ function buildReportParagraphs(record, isLast) {
     })
   );
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       children: [
         new TextRun({ text: "整体置信度：", bold: true }),
@@ -92,7 +246,7 @@ function buildReportParagraphs(record, isLast) {
   );
 
   if (record.extra_notes) {
-    paragraphs.push(
+    blocks.push(
       new Paragraph({
         children: [
           new TextRun({ text: "补充说明：", bold: true }),
@@ -102,28 +256,20 @@ function buildReportParagraphs(record, isLast) {
     );
   }
 
-  paragraphs.push(
+  blocks.push(
     new Paragraph({
       text: "完整报告",
       heading: HeadingLevel.HEADING_2
     })
   );
 
-  const plainReport = markdownToPlainText(record.result_markdown || "");
-  const lines = plainReport
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    paragraphs.push(new Paragraph({ text: line }));
-  }
+  blocks.push(...markdownToDocxBlocks(record.result_markdown || ""));
 
   if (!isLast) {
-    paragraphs.push(new Paragraph({ children: [new PageBreak()] }));
+    blocks.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
-  return paragraphs;
+  return blocks;
 }
 
 export default async function handler(req, res) {
@@ -139,7 +285,10 @@ export default async function handler(req, res) {
       .limit(100);
 
     if (error) {
-      return res.status(500).json({ error: error.message, detail: error });
+      return res.status(500).json({
+        error: error.message,
+        detail: error
+      });
     }
 
     const records = data || [];
@@ -162,7 +311,7 @@ export default async function handler(req, res) {
     }
 
     records.forEach((record, index) => {
-      children.push(...buildReportParagraphs(record, index === records.length - 1));
+      children.push(...buildReportBlocks(record, index === records.length - 1));
     });
 
     const doc = new Document({
