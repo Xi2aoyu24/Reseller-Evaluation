@@ -29,6 +29,36 @@ function getSupabaseClient() {
   });
 }
 
+function formatChinaTime(value) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  })
+    .format(new Date(value))
+    .replace(/\//g, "-");
+}
+
+function formatChinaDate(value) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  })
+    .format(new Date(value))
+    .replace(/\//g, "-");
+}
+
 function cleanInlineMarkdown(text) {
   return String(text || "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -203,6 +233,15 @@ function buildReportBlocks(record, isLast) {
   blocks.push(
     new Paragraph({
       children: [
+        new TextRun({ text: "创建时间：", bold: true }),
+        new TextRun(formatChinaTime(record.created_at))
+      ]
+    })
+  );
+
+  blocks.push(
+    new Paragraph({
+      children: [
         new TextRun({ text: "国家/地区：", bold: true }),
         new TextRun(record.country_or_region || "")
       ]
@@ -299,7 +338,7 @@ export default async function handler(req, res) {
         heading: HeadingLevel.TITLE
       }),
       new Paragraph({
-        text: `导出时间：${new Date().toLocaleString("zh-CN")}`
+        text: `导出时间：${formatChinaTime(new Date())}`
       }),
       new Paragraph({
         text: `记录数量：${records.length}`
@@ -325,9 +364,7 @@ export default async function handler(req, res) {
 
     const buffer = await Packer.toBuffer(doc);
 
-    const filename = `evaluation-reports-${new Date()
-      .toISOString()
-      .slice(0, 10)}.docx`;
+    const filename = `evaluation-reports-${formatChinaDate(new Date())}.docx`;
 
     res.setHeader(
       "Content-Type",
